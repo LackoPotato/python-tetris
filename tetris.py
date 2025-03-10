@@ -4,6 +4,28 @@ from pynput import keyboard
 from pynput.keyboard import Key
 #Made by LackoPotato :D
 
+class game:
+    RUNNING = True
+    MAX_FPS = 6
+    FPS = 0
+    STATE = "title"
+    CLEARING_DISPLAY = False
+    SCREEN_SIZE_CHANGED = False
+    SCREEN_SIZE = os.get_terminal_size()
+
+    def clear_screen():
+        os.system('cls||clear')
+        
+    TITLE_LEN = 43
+    TITLE = """{m} _____  {r} _____ {e}  _____ {y}  _____ {g}  _ {c}  _____
+{m}|__ __| {r}|  ___|{e} |__ __|{y} |  _  |{g} | |{c} |  ___|
+{m}  | |   {r}| |___ {e}   | |  {y} | |_|_|{g} | |{c} | |___  
+{m}  | |   {r}|  ___|{e}   | |  {y} |  _|  {g} | |{c} |___  |
+{m}  | |   {r}| |___ {e}   | |  {y} | |  ||{g} | |{c}  ___| | 
+{m}  |_|   {r}|_____|{e}   |_|  {y} |_|  ||{g} |_|{c} |_____|
+
+{p}--------- terminal port by potato ---------"""
+
 class vec2:
     def __init__(self, x, y):
         self.x = x
@@ -46,30 +68,42 @@ class vec2:
 
 class key:
     BUFFER_INPUTS = True
-    pressed = {}
+    ACTIVE = "active"
+    ACTIVEFRAMES = "active_frames"
+    IGNOREFRAME = 1
+    buffer = {}
     to_clear = []
 
     def get_axis(a,b) -> int:
         return int(key.is_pressed(b)) - int(key.is_pressed(a))
     
     def is_pressed(key_press) -> bool:
-        return key_press in key.pressed and key.pressed[key_press]
+        return key_press in key.buffer and key.buffer[key_press][key.ACTIVE] and key.buffer[key_press][key.ACTIVEFRAMES] != key.IGNOREFRAME
     
     def on_press(key_press):
-        key.pressed[key_press] = True
+        if key_press in key.buffer:
+            key.buffer[key_press][key.ACTIVE] = True
+        else:
+            key.buffer[key_press] = {key.ACTIVE:True,key.ACTIVEFRAMES:0}
 
     def on_release(key_press):
         if key.BUFFER_INPUTS:
             key.to_clear.append(key_press)
         else:
-            key.pressed[key_press] = False
+            key.buffer[key_press][key.ACTIVE] = False
     
     def clear_buffer():
-        for k in key.to_clear:
-            key.pressed[k] = False
+        for key_press in key.to_clear:
+            key.buffer[key_press][key.ACTIVE] = False
+            key.buffer[key_press][key.ACTIVEFRAMES] = 0
         key.to_clear = []
-    
-        
+
+    def increase_active_frame():
+        for button in key.buffer:
+            data = key.buffer[button]
+            if data[key.ACTIVE]:
+                data[key.ACTIVEFRAMES] += 1
+
     listener = keyboard.Listener(
         on_press=on_press,
         on_release=on_release)
@@ -130,28 +164,6 @@ class render():
             e=c.end,
             )
 
-class game:
-    RUNNING = True
-    MAX_FPS = 10
-    FPS = 0
-    STATE = "title"
-    CLEARING_DISPLAY = False
-    SCREEN_SIZE_CHANGED = False
-    SCREEN_SIZE = os.get_terminal_size()
-
-    def clear_screen():
-        os.system('cls||clear')
-        
-    TITLE_LEN = 43
-    TITLE = """{m} _____  {r} _____ {e}  _____ {y}  _____ {g}  _ {c}  _____
-{m}|__ __| {r}|  ___|{e} |__ __|{y} |  _  |{g} | |{c} |  ___|
-{m}  | |   {r}| |___ {e}   | |  {y} | |_|_|{g} | |{c} | |___  
-{m}  | |   {r}|  ___|{e}   | |  {y} |  _|  {g} | |{c} |___  |
-{m}  | |   {r}| |___ {e}   | |  {y} | |  ||{g} | |{c}  ___| | 
-{m}  |_|   {r}|_____|{e}   |_|  {y} |_|  ||{g} |_|{c} |_____|
-
-{p}--------- terminal port by potato ---------"""
-
 class block:
     EMPTY = "{gr}| {e}"
     BLOCK = "[]{e}"
@@ -165,23 +177,23 @@ class block:
 		"color":"m",
 		},
 	{
-		"pixels":[vec2(0,0),vec2(0,1),vec2(0,-1),vec2(-1,1)],
+		"pixels":[vec2(0,0),vec2(1,0),vec2(-1,0),vec2(1,1)],
 		"color":"c",
 		},
 	{
-		"pixels":[vec2(0,0),vec2(0,1),vec2(0,-1),vec2(1,1)],
+		"pixels":[vec2(0,0),vec2(-1,0),vec2(1,0),vec2(-1,1)],
 		"color":"g",
 		},
 	{
-		"pixels":[vec2(0,0), vec2(-1,0),vec2(0,-1),vec2(1,-1)],
+		"pixels":[vec2(0,1), vec2(-1,1),vec2(0,0),vec2(1,0)],
 		"color":"e",
 		},
 	{
-		"pixels":[vec2(0,0), vec2(-1,-1),vec2(0,-1),vec2(1,0)],
+		"pixels":[vec2(0,1), vec2(-1,0),vec2(0,0),vec2(1,1)],
 		"color":"y"
 		},
 	{
-		"pixels":[vec2(0,0), vec2(-1,-1),vec2(0,-1),vec2(-1,0)],
+		"pixels":[vec2(0,1), vec2(-1,0),vec2(0,0),vec2(-1,1)],
 		"color":"p",
 		}
         ]
@@ -189,37 +201,93 @@ class block:
     active_screen:dict[dict[int,str]] = {}
     
     moving_blocks:list[vec2] = []
-    current_moving_color:str = ""
+    next_piece:list[vec2] = []
     
+    active_blocks:list[vec2] = []
+    current_moving_color:str = ""
+
     compiled_lines:list[str] = []
     changed_lines:list[int] = []
-    SCREEN_SIZE:vec2 = vec2(10,10)
-    INITIAL_START_POS = vec2(5,5)
 
-    def move_active_piece(direction:vec2):
-        for i in range(len(block.moving_blocks)):
-            block.moving_blocks[i] += direction
+    iframes_used = 0
+    MAX_IFRAMES_DELAY = 1
+    MAX_IFRAMES = 5
+    
+    DIRECTION_DOWN:vec2 = vec2(0,1)
+    SCREEN_SIZE:vec2 = vec2(10,13)
+    INITIAL_START_POS:vec2 = vec2(5,0)
+
+    def transform(vec2_array:list[vec2],direction:vec2) -> list:
+        new_list:list[vec2] = []
+        for vec2 in vec2_array:
+            new_list.append(vec2+direction)
+        return new_list
 
     def reload_screen():
         block.compiled_lines = [""]*block.SCREEN_SIZE.y
         block.active_screen = {y: {x: "" for x in range(block.SCREEN_SIZE.x)} for y in range(block.SCREEN_SIZE.y)}
     
-    def set_piece(index:int):
+    def get_piece(index:int) -> list:
         block.current_moving_color = block.pieces[index]['color']
-        block.moving_blocks = [i+block.INITIAL_START_POS for i in block.pieces[index]['pixels']]
+        return [i+block.INITIAL_START_POS for i in block.pieces[index]['pixels']]
 
-    def push_vec2_arr_to_active(array:list[vec2],color:str):
+    #Checks if an array of vec2s is colliding with Active_Screen
+    def is_colliding(vec2_array:list[vec2]) -> bool:
+        for vec in vec2_array:
+            if vec.y in block.active_screen and vec.x in block.active_screen[vec.y]:
+                return True
+        return False
+
+    def is_colliding_existing(vec2_array:list[vec2]) -> bool:
+        for vec in vec2_array:
+            if vec.y in block.active_screen and block.active_screen[vec.y][vec.x] != "":
+                return True
+        return False
+    
+    def is_out_screen_x(vec2_array:list[vec2]) -> bool:
+        for vec in vec2_array:
+            if vec.x >= block.SCREEN_SIZE.x or vec.x < 0:
+                return True
+        return False
+    
+    def distance_out_screen(vec2_array:list[vec2]) -> vec2:
+        out_of_bounds:vec2 = vec2(0,0)
+        for vec in vec2_array:
+            
+            distance:vec2 = vec2(max(0,- vec.x) + min(0,block.SCREEN_SIZE.x - 1 - vec.x),min(0,block.SCREEN_SIZE.y - 1 - vec.y))
+            
+            if abs(distance.x) > abs(out_of_bounds.x):
+                out_of_bounds.x = distance.x
+            if abs(distance.y) > abs(out_of_bounds.y):
+                out_of_bounds.y = distance.y
+        return out_of_bounds
+
+    def is_below_floor(vec2_array:list[vec2]) -> bool:
+        for vec in vec2_array:
+            if vec.y >= block.SCREEN_SIZE.y:
+                return True
+        return False
+                
+    def transform_vec2_to_dict(array:list[vec2],color:str) -> dict[int,dict[int,str]]:
         new_active = {}
         for vec in array:
             if not vec.y in new_active:
                 new_active[vec.y] = {}
             new_active[vec.y][vec.x] = color
-        block.changed_lines = list(new_active)
+        return new_active
+    
+    def push_vec2_arr_to_active(array:list[vec2],color:str):
+        new_active = block.transform_vec2_to_dict(array,color)
         for y in new_active:
-            block.active_screen[y].update(new_active[y])
+            if y in block.active_screen:
+                if not y in block.changed_lines:
+                    block.changed_lines.append(y)
+                block.active_screen[y].update(new_active[y])
 
-
-    def rotate_piece(clockwise:bool,piece_pixels:list[vec2]) -> list[vec2]:
+    def pop_vec2_arr_from_active(array:list[vec2]):
+        block.push_vec2_arr_to_active(array,"")
+    
+    def rotate_piece(piece_pixels:list[vec2],clockwise:bool) -> list[vec2]:
         offset = piece_pixels[0]
         local_pixels:list[vec2] = [pixel-piece_pixels[0] for pixel in piece_pixels]
         new_piece:list[vec2] = []
@@ -251,6 +319,7 @@ class block:
     def push_visual_change():
         for y in block.changed_lines:
             block.compiled_lines[y] = block.compile_line(y)
+        block.changed_lines = []
 
     def compile_line(changed_line:int) -> str:
         new_line = ""
@@ -262,12 +331,43 @@ class block:
                 new_line += render.color("{"+colour+"}"+block.BLOCK)
         return new_line
 
-class var:
-    counter = 0
-    time = 0
-    x = 0
-    y = 0
+    def get_cleared_lines() -> list:
+        cleared_lines:list = []
+        for line in block.changed_lines:
+            full_line:str = ""
+            for x in block.active_screen[line]:
+                full_line += block.active_screen[line][x]
+            if len(full_line) == block.SCREEN_SIZE.x:
+                cleared_lines.append(line)
+        return cleared_lines
+    
+    def random_piece():
+        if len(block.next_piece) == 0:
+            block.moving_blocks = block.get_piece(rng.randint(0,len(block.pieces)-1))
+        else:
+            block.moving_blocks = block.next_piece
+        block.next_piece = block.get_piece(rng.randint(0,len(block.pieces)-1))
 
+    def get_block_string(pieces:list[vec2]) -> str:
+        data:dict[int,list[int]] = {}
+        for vec in pieces:
+            if vec.y in data:
+                data[vec.y].append(vec.y)
+            else:
+                data[vec.y] = [vec.y]
+        for line in data:
+            data[line].sort()
+        
+        
+
+    def pop_and_shift(line:int):
+        for y in range(line-1,0,-1):
+            lineToClone = block.active_screen[y].copy()
+            block.active_screen[y+1] = lineToClone
+            if not y in block.changed_lines:
+                block.changed_lines.append(y)
+        block.active_screen[0] = {x: "" for x in range(block.SCREEN_SIZE.x)}
+    
 class title_vars:
     selected_button = 0
     buttons = ["start","exit"]
@@ -292,7 +392,6 @@ def _title(delta:int):
                 game.RUNNING = False
 
 def render_title():
-        print(os.get_terminal_size().columns,game.TITLE.find("\n")/2)
         render.center_horizontal(render.color(game.TITLE),game.TITLE_LEN)
         
         print(2*"\n")
@@ -302,26 +401,80 @@ def render_title():
             render.center_horizontal(button,len(button))
 
 
-def _process(delta:int):
+def _process(delta:float):
     rotate_input = key.get_axis(Key.up,Key.down)
     move_input = key.get_axis(Key.left,Key.right)
-    if rotate_input != 0 or move_input != 0:
-        block.push_vec2_arr_to_active(block.moving_blocks,"")
-    if rotate_input != 0:
-        block.moving_blocks = block.rotate_piece(key.get_axis(Key.up,Key.down) == 1,block.moving_blocks)
-    if move_input != 0:
-        block.move_active_piece(vec2(move_input,0))
-    if rotate_input != 0 or move_input != 0:
-        block.push_vec2_arr_to_active(block.moving_blocks,block.current_moving_color)
-        block.push_visual_change()
-    print(f"\nFPS: {game.FPS} | BUFFER: {key.pressed}")
-    render.center(block.get_game_screen(),block.SCREEN_SIZE*vec2(2,1))
+    place_input = key.is_pressed(Key.space)
+
+    #Clear old moving block
+    block.pop_vec2_arr_from_active(block.moving_blocks)
+    
+    is_inputing = rotate_input != 0 or move_input != 0 or place_input
+    
+    #Check if any input is given
+    if is_inputing:
+        new_active_blocks:list[vec2] = block.moving_blocks.copy()
+        
+        if rotate_input != 0:
+            new_active_blocks = block.rotate_piece(new_active_blocks,key.get_axis(Key.up,Key.down) == 1)
+        
+        if move_input != 0:
+            new_active_blocks = block.transform(new_active_blocks,vec2(move_input,0))
+
+        if place_input:
+            new_active_blocks = block.transform(new_active_blocks,vec2(0,1))
+        
+        distance_out_bounds:vec2 = block.distance_out_screen(new_active_blocks)
+        if distance_out_bounds != vec2(0,0):
+            new_active_blocks = block.transform(new_active_blocks,distance_out_bounds)
+        
+        if not block.is_colliding_existing(new_active_blocks):
+            block.moving_blocks = new_active_blocks
+
+            #If rotated, add extra iframe
+            if rotate_input != 0 and rotate_input != 0:
+                block.iframes_used -= 1
+
+    blocks_transformed_down = block.transform(block.moving_blocks,block.DIRECTION_DOWN)
+
+    #If true, placing should be delayed until next frame
+    iframe_conditions = (block.MAX_IFRAMES > block.iframes_used) if is_inputing else (block.MAX_IFRAMES_DELAY > block.iframes_used)
+    
+    #If true, block should be placed
+    place_conditions = block.is_below_floor(blocks_transformed_down) or block.is_colliding_existing(blocks_transformed_down)
+    
+    if place_conditions:
+        if not iframe_conditions:
+            block.push_vec2_arr_to_active(block.moving_blocks,block.current_moving_color)
+            block.random_piece()
+        block.iframes_used += 1
+
+        lines_to_clear:list = block.get_cleared_lines()
+        print(f"# LINES TO CLEAR: {lines_to_clear}")
+        for line in lines_to_clear:
+            block.pop_and_shift(line)
+    else:
+        block.moving_blocks = blocks_transformed_down
+        block.iframes_used = 0
+    
+    block.push_vec2_arr_to_active(block.moving_blocks,block.current_moving_color)
+    block.push_visual_change()
+    print(f"""#GLOBAL: {block.active_screen}
+#MOVING_BLOCKS: {block.moving_blocks}
+#TRANFORMED ARR: {block.transform_vec2_to_dict(block.moving_blocks,'g')}
+#ACTIVE KEY BUFFER: {key.buffer}
+#ROTATE: {rotate_input != 0}
+#MOVE: {move_input != 0}
+#QUEUED_CLEAR: {key.to_clear}
+FPS: {game.FPS} | IFRAMES: {block.iframes_used} | DELTA: {delta}
+""")
     key.clear_buffer()
+    render.center(block.get_game_screen(),block.SCREEN_SIZE*vec2(2,1))
 
 def _ready():
     block.reload_screen()
     block.refresh_entire_screen()
-    block.set_piece(rng.randint(0,len(block.pieces)-1))
+    block.random_piece()
     game.clear_screen()
     render_title()
     game.UPDATING_DISPLAY = False
@@ -334,7 +487,7 @@ while game.RUNNING:
     game.SCREEN_SIZE_CHANGED = os.get_terminal_size() != game.SCREEN_SIZE
     
     if game.CLEARING_DISPLAY:
-        print("CELAR")
+        print("CLEAR")
         game.clear_screen()
         
     if game.STATE == "title":
@@ -344,7 +497,8 @@ while game.RUNNING:
 
     if key.BUFFER_INPUTS:
         key.clear_buffer()
-        
+    
+    key.increase_active_frame()
     game.SCREEN_SIZE = os.get_terminal_size()
     if game.MAX_FPS == -1:
         frame_time = (time.time() - start)
@@ -354,5 +508,5 @@ while game.RUNNING:
             time.sleep(frame_time)
         else:
             frame_time = (time.time() - start)
-    
+
     game.FPS = 1/(time.time()-start)
