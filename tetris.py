@@ -4,28 +4,6 @@ from pynput import keyboard
 from pynput.keyboard import Key
 #Made by LackoPotato :D
 
-class game:
-    RUNNING = True
-    MAX_FPS = 6
-    FPS = 0
-    STATE = "title"
-    CLEARING_DISPLAY = False
-    SCREEN_SIZE_CHANGED = False
-    SCREEN_SIZE = os.get_terminal_size()
-
-    def clear_screen():
-        os.system('cls||clear')
-        
-    TITLE_LEN = 43
-    TITLE = """{m} _____  {r} _____ {e}  _____ {y}  _____ {g}  _ {c}  _____
-{m}|__ __| {r}|  ___|{e} |__ __|{y} |  _  |{g} | |{c} |  ___|
-{m}  | |   {r}| |___ {e}   | |  {y} | |_|_|{g} | |{c} | |___  
-{m}  | |   {r}|  ___|{e}   | |  {y} |  _|  {g} | |{c} |___  |
-{m}  | |   {r}| |___ {e}   | |  {y} | |  ||{g} | |{c}  ___| | 
-{m}  |_|   {r}|_____|{e}   |_|  {y} |_|  ||{g} |_|{c} |_____|
-
-{p}--------- terminal port by potato ---------"""
-
 class vec2:
     def __init__(self, x, y):
         self.x = x
@@ -65,6 +43,28 @@ class vec2:
 
     def __eq__(self,val):
         return isinstance(val, vec2) and self.x == val.x and self.y == val.y
+
+class game:
+    RUNNING = True
+    MAX_FPS = 6
+    FPS = 0
+    STATE = "title"
+    CLEARING_DISPLAY = False
+    SCREEN_SIZE_CHANGED = False
+    SCREEN_SIZE = vec2(0,0)
+
+    def clear_screen():
+        os.system('cls||clear')
+        
+    TITLE_LEN = 43
+    TITLE = """{m} _____  {r} _____ {e}  _____ {y}  _____ {g}  _ {c}  _____
+{m}|__ __| {r}|  ___|{e} |__ __|{y} |  _  |{g} | |{c} |  ___|
+{m}  | |   {r}| |___ {e}   | |  {y} | |_|_|{g} | |{c} | |___  
+{m}  | |   {r}|  ___|{e}   | |  {y} |  _|  {g} | |{c} |___  |
+{m}  | |   {r}| |___ {e}   | |  {y} | |  ||{g} | |{c}  ___| | 
+{m}  |_|   {r}|_____|{e}   |_|  {y} |_|  ||{g} |_|{c} |_____|
+
+{p}--------- terminal port by potato ---------"""
 
 class key:
     BUFFER_INPUTS = True
@@ -121,13 +121,40 @@ class c:
     underline = '\033[4m'
     end = '\033[0m'
 
-class render():
-    def offset(string:str,offset:vec2):
-        new_string = "\n"*offset.y
-        for line in string.split("\n"):
-            new_string += (" "*offset.x + line) + "\n"
-        print(new_string)
+    colors = []
+    def __init__():
+        c.colors = []
+        for key in vars(c):
+            if key != colors:
+                c.colors.append(vars(c)[key])
 
+class render():
+    screen = []
+
+    def screen_size_changed(size:vec2):
+        print("UDWODJW")
+        render.screen = [[""]*size.x]*size.y
+    
+    def print_screen():
+        fs = ""
+        for layer in render.screen:
+            fs += f"{''.join(layer)}\n"
+        print(fs)
+
+    def print(string:str,line:int = 0):
+        for i,newline in enumerate(string.split("\n")):
+            render.screen[i] = newline.split()
+    
+    def offset(string:str,offset:vec2):
+        lines = ["\n"]*offset.y
+        for line in string.split("\n"):
+            lines.append((" "*offset.x + line))
+        render.merge_screen(lines)
+
+    def merge_screen(lines:list[str],offset:int = 0):
+        for y,line in enumerate(lines):
+            for x,char in enumerate(line.split()):
+                render.screen[y+offset][x] = char
     
     def center_horizontal(string:str,size:int):
         render.offset(string,vec2(int(os.get_terminal_size().columns/2)-int(size/2),0))
@@ -205,6 +232,7 @@ class block:
     
     active_blocks:list[vec2] = []
     current_moving_color:str = ""
+    next_moving_color:str = ""
 
     compiled_lines:list[str] = []
     changed_lines:list[int] = []
@@ -217,6 +245,12 @@ class block:
     SCREEN_SIZE:vec2 = vec2(10,13)
     INITIAL_START_POS:vec2 = vec2(5,0)
 
+    def start():
+        block.reload_screen()
+        block.refresh_entire_screen()
+        block.random_piece(True)
+        iframes_used = 0
+    
     def transform(vec2_array:list[vec2],direction:vec2) -> list:
         new_list:list[vec2] = []
         for vec2 in vec2_array:
@@ -227,9 +261,11 @@ class block:
         block.compiled_lines = [""]*block.SCREEN_SIZE.y
         block.active_screen = {y: {x: "" for x in range(block.SCREEN_SIZE.x)} for y in range(block.SCREEN_SIZE.y)}
     
-    def get_piece(index:int) -> list:
-        block.current_moving_color = block.pieces[index]['color']
-        return [i+block.INITIAL_START_POS for i in block.pieces[index]['pixels']]
+    def get_piece(index:int) -> dict:
+        return {
+            "piece":[i+block.INITIAL_START_POS for i in block.pieces[index]['pixels']],
+            "color":block.pieces[index]['color'],
+            }
 
     #Checks if an array of vec2s is colliding with Active_Screen
     def is_colliding(vec2_array:list[vec2]) -> bool:
@@ -325,10 +361,7 @@ class block:
         new_line = ""
         for x in block.active_screen[changed_line]:
             colour = block.active_screen[changed_line][x]
-            if colour == "":
-                new_line += render.color(block.EMPTY)
-            else:
-                new_line += render.color("{"+colour+"}"+block.BLOCK)
+            new_line += render.color(block.EMPTY) if colour == "" else render.color("{"+colour+"}"+block.BLOCK)
         return new_line
 
     def get_cleared_lines() -> list:
@@ -341,24 +374,37 @@ class block:
                 cleared_lines.append(line)
         return cleared_lines
     
-    def random_piece():
-        if len(block.next_piece) == 0:
-            block.moving_blocks = block.get_piece(rng.randint(0,len(block.pieces)-1))
+    def random_piece(initial_start:bool = False):
+        if initial_start:
+            piece_data = block.get_piece(rng.randint(0,len(block.pieces)-1))
+            block.moving_blocks = piece_data['piece']
+            block.current_moving_color = piece_data['color']
         else:
             block.moving_blocks = block.next_piece
-        block.next_piece = block.get_piece(rng.randint(0,len(block.pieces)-1))
+            block.current_moving_color = block.next_moving_color
+        piece_data = block.get_piece(rng.randint(0,len(block.pieces)-1))
+        block.next_piece = piece_data['piece']
+        block.next_moving_color = piece_data['color']
 
-    def get_block_string(pieces:list[vec2]) -> str:
+    def get_block_string(pieces:list[vec2],color:str) -> str:
         data:dict[int,list[int]] = {}
         for vec in pieces:
             if vec.y in data:
-                data[vec.y].append(vec.y)
+                data[vec.y].append(vec.x)
             else:
-                data[vec.y] = [vec.y]
+                data[vec.y] = [vec.x]
         for line in data:
             data[line].sort()
-        
-        
+        y_layers = list(data.keys())
+        y_layers.sort()
+        full_str = ""
+        for y in range(y_layers[-1]+1):
+            if y in data:
+                for x in data[y]:
+                    full_str += render.color("{"+color+"}[]{e}") if x in data[y] else "  "
+            full_str += "\n"
+        return full_str
+  
 
     def pop_and_shift(line:int):
         for y in range(line-1,0,-1):
@@ -383,7 +429,7 @@ def _title(delta:int):
             title_vars.selected_button = 0
         
         render_title()
-
+        render.print_screen()
         if key.is_pressed(Key.enter):
             if title_vars.selected_button == 0:
                 game.STATE = 'asd'
@@ -450,7 +496,7 @@ def _process(delta:float):
         block.iframes_used += 1
 
         lines_to_clear:list = block.get_cleared_lines()
-        print(f"# LINES TO CLEAR: {lines_to_clear}")
+        render.print(f"# LINES TO CLEAR: {lines_to_clear}",0)
         for line in lines_to_clear:
             block.pop_and_shift(line)
     else:
@@ -459,36 +505,36 @@ def _process(delta:float):
     
     block.push_vec2_arr_to_active(block.moving_blocks,block.current_moving_color)
     block.push_visual_change()
-    print(f"""#GLOBAL: {block.active_screen}
+    render.print(f"""#GLOBAL: {block.active_screen}
 #MOVING_BLOCKS: {block.moving_blocks}
 #TRANFORMED ARR: {block.transform_vec2_to_dict(block.moving_blocks,'g')}
 #ACTIVE KEY BUFFER: {key.buffer}
 #ROTATE: {rotate_input != 0}
 #MOVE: {move_input != 0}
 #QUEUED_CLEAR: {key.to_clear}
+#NEXT: {block.get_block_string(block.next_piece,block.next_moving_color)}
 FPS: {game.FPS} | IFRAMES: {block.iframes_used} | DELTA: {delta}
-""")
+""",1)
     key.clear_buffer()
     render.center(block.get_game_screen(),block.SCREEN_SIZE*vec2(2,1))
 
 def _ready():
-    block.reload_screen()
-    block.refresh_entire_screen()
-    block.random_piece()
+    block.start()
     game.clear_screen()
     render_title()
     game.UPDATING_DISPLAY = False
 
 
+render.screen_size_changed(vec2(os.get_terminal_size().columns,os.get_terminal_size().lines))
 _ready()
 frame_time = 0
 while game.RUNNING:
     start = time.time()
-    game.SCREEN_SIZE_CHANGED = os.get_terminal_size() != game.SCREEN_SIZE
-    
-    if game.CLEARING_DISPLAY:
-        print("CLEAR")
-        game.clear_screen()
+    current_screen_size = vec2(os.get_terminal_size().columns,os.get_terminal_size().lines)
+    game.SCREEN_SIZE_CHANGED = current_screen_size != game.SCREEN_SIZE
+    game.SCREEN_SIZE = current_screen_size
+    if game.SCREEN_SIZE_CHANGED:
+        render.screen_size_changed(current_screen_size)
         
     if game.STATE == "title":
         _title(frame_time)
@@ -497,9 +543,13 @@ while game.RUNNING:
 
     if key.BUFFER_INPUTS:
         key.clear_buffer()
-    
+
+    if game.CLEARING_DISPLAY:
+        print("CLEAR")
+        game.clear_screen()
+        render.print_screen()
     key.increase_active_frame()
-    game.SCREEN_SIZE = os.get_terminal_size()
+    
     if game.MAX_FPS == -1:
         frame_time = (time.time() - start)
     else:
